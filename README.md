@@ -7,6 +7,7 @@
 * [Михаил Терюха](https://github.com/xtoter)
 * [Алина Чибизова](https://github.com/alina8031)
 * [Эдгар Макаров](https://github.com/Robby-the-paladin)
+
 Бэкенд - С++, фронтенд - Рефал+LaTeX.
 
 # Оглавление
