@@ -1,3 +1,14 @@
+# Команда
+* [Андрей Ильин](https://github.com/StarikTenger)
+* [Александр Дельман](https://github.com/xendalm)
+* [Данила Князихин](https://github.com/dak151449)
+* [Кирилл Шевченко](https://github.com/shevchenkokk)
+* [Анна Терентьева](https://github.com/mathhyyn)
+* [Михаил Терюха](https://github.com/xtoter)
+* [Алина Чибизова](https://github.com/alina8031)
+* [Эдгар Макаров](https://github.com/Robby-the-paladin)
+Бэкенд - С++, фронтенд - Рефал+LaTeX.
+
 # Оглавление
 * [О проекте](#about)
 * [Сборка и запуск](#build)
