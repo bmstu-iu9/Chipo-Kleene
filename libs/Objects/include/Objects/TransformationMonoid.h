@@ -34,7 +34,7 @@ class TransformationMonoid {
 	// Терм (флаг оставляет ли в языке, имя, вектор переходов)
 	struct Term {
 		bool isFinal = false;
-		vector<alphabet_symbol> name;
+		vector<alphabet_symbol> name;         
 		vector<Transition> transitions;
 		bool operator==(const Term& a) const {
 			return transitions == a.transitions;
@@ -60,6 +60,9 @@ class TransformationMonoid {
 	get_rewriting_rules();
 	// вывод классов эквивалентных
 	string get_equalence_classes_txt();
+	bool check_poly_ambiguity();
+	bool check_exp_ambiguity(int init);
+	static pair<int,set<pair<string,int>>> trans_ambiguity(const FiniteAutomaton& in);
 	map<string, vector<string>> get_equalence_classes_map();
 	// вывод правил переписывания
 	string get_rewriting_rules_txt(iLogTemplate* log = nullptr);

@@ -1,7 +1,7 @@
 #include "Interpreter/Interpreter.h"
 #include <string>
 
-bool types_equiv(const vector<ObjectType>& input, const ObjectType& output) {
+bool types_equiv(vector<ObjectType> input, ObjectType output) {
 	if (!((output == input[0]) ||
 		  (output == ObjectType::DFA && input[0] == ObjectType::NFA) ||
 		  (output == ObjectType::NFA && input[0] == ObjectType::DFA))) {
@@ -11,14 +11,14 @@ bool types_equiv(const vector<ObjectType>& input, const ObjectType& output) {
 }
 
 void Interpreter::generate_brief_templates() {
-	for (const auto& func_item : names_to_functions) {
-		for (const auto& function : func_item.second) {
-			string func_id = get_func_id(function).value();
+	for (auto func_item : names_to_functions) {
+		for (auto function : func_item.second) {
+			string func_id = get_func_id(function);
 			string filename = "./resources/template/";
 			filename += func_id + ".tex";
 			ofstream outfile(filename);
-			outfile << "\\section{" << function.name << "}\n";
-			outfile << "\\begin{frame}{" << function.name << "}\n";
+			outfile << "\\section{" << function.name << "}" << endl;
+			outfile << "\\begin{frame}{" << function.name << "}" << endl;
 
 			bool equal_types = types_equiv(function.input, function.output);
 			if (function.input.size() > 1) {
@@ -27,7 +27,7 @@ void Interpreter::generate_brief_templates() {
 			//========= Шаблон для одиночных входных данных =========
 
 			if (function.input.size() == 1) {
-				// Для автоматов
+				//Для автоматов
 				if ((function.input[0] == ObjectType::NFA ||
 					 function.input[0] == ObjectType::DFA)) {
 					outfile << "\tАвтомат";
@@ -36,16 +36,16 @@ void Interpreter::generate_brief_templates() {
 						outfile << " до преобразования";
 					}
 
-					outfile << ":\n\n\t%template_oldautomaton\n\n";
+					outfile << ":\n\n\t%template_oldautomaton" << endl << endl;
 				}
 
-				// Для префиксной грамматики
+				//Для префиксной грамматики
 				if (function.input[0] == ObjectType::PrefixGrammar) {
-					outfile << "\tПрефиксная грамматика:\n\n";
-					outfile << "\t%template_grammar\n\n";
+					outfile << "\tПрефиксная грамматика:" << endl << endl;
+					outfile << "\t%template_grammar" << endl << endl;
 				}
 
-				// Для регулярок
+				//Для регулярок
 				if ((function.input[0] == ObjectType::Regex)) {
 					outfile << "\tРегулярное выражение";
 
@@ -53,7 +53,7 @@ void Interpreter::generate_brief_templates() {
 						outfile << " до преобразования";
 					}
 
-					outfile << ":\n\t%template_oldregex\n\n";
+					outfile << ":\n\t%template_oldregex" << endl << endl;
 				}
 			} else {
 
@@ -64,56 +64,62 @@ void Interpreter::generate_brief_templates() {
 
 				for (int index = 0; index < (function.input.size()); index++) {
 
-					// Для автоматов
+					//Для автоматов
 					if ((function.input[index] == ObjectType::NFA ||
 						 function.input[index] == ObjectType::DFA)) {
 						if (input_types_equal) {
 							if (index == 0) {
-								outfile << "\tПервый автомат:\n\n";
+								outfile << "\tПервый автомат:" << endl << endl;
 								outfile << "\t%template_automaton" << index + 1
-										<< "\n\n";
+										<< endl
+										<< endl;
 							} else {
-								outfile << "\tВторой автомат:\n\n";
+								outfile << "\tВторой автомат:" << endl << endl;
 								outfile << "\t%template_automaton" << index + 1
-										<< "\n\n";
+										<< endl
+										<< endl;
 							}
 						} else {
-							outfile << "\tАвтомат:\n\n";
-							outfile << "\t%template_oldautomaton\n";
+							outfile << "\tАвтомат:" << endl << endl;
+							outfile << "\t%template_oldautomaton" << endl;
 						}
 					}
 
-					// Для префиксной грамматики
+					//Для префиксной грамматики
 					if (function.input[index] == ObjectType::PrefixGrammar) {
-						outfile << "\tПрефиксная грамматика:\n\n";
-						outfile << "\t%template_grammar\n\n";
+						outfile << "\tПрефиксная грамматика:" << endl << endl;
+						outfile << "\t%template_grammar" << endl << endl;
 					}
 
-					// Для регулярок
+					//Для регулярок
 					if (function.input[index] == ObjectType::Regex) {
 						if (input_types_equal) {
 							if (index == 0) {
-								outfile << "\tПервое регулярное выражение:\n";
+								outfile << "\tПервое регулярное выражение:"
+										<< endl;
 								outfile << "\t%template_regex" << index + 1
-										<< "\n\n";
+										<< endl
+										<< endl;
 							} else {
-								outfile << "\tВторое регулярное выражение:\n";
+								outfile << "\tВторое регулярное выражение:"
+										<< endl;
 								outfile << "\t%template_regex" << index + 1
-										<< "\n\n";
+										<< endl
+										<< endl;
 							}
 						} else {
-							outfile << "\tРегулярное выражение:\n";
-							outfile << "\t%template_oldregex\n\n";
+							outfile << "\tРегулярное выражение:" << endl;
+							outfile << "\t%template_oldregex" << endl << endl;
 						}
 					}
 
-					// Для Array
+					//Для Array
 					if (function.input[index] == ObjectType::Array) {
-						outfile << "\tПравила переписывания:\n\n";
-						outfile << "\t%template_oldarray\n\n";
+						outfile << "\tПравила переписывания:" << endl << endl;
+						outfile << "\t%template_oldarray" << endl << endl;
 					}
 
-					// Для других типов
+					//Для других типов
 					if (function.input[index] == ObjectType::Int ||
 						function.input[index] == ObjectType::AmbiguityValue ||
 						function.input[index] == ObjectType::Boolean ||
@@ -121,14 +127,16 @@ void Interpreter::generate_brief_templates() {
 						if (input_types_equal) {
 							outfile << "\t"
 									<< types_to_string[function.input[index]]
-									<< index + 1 << ":\n\n";
-							outfile << "\t%template_value" << index + 1
-									<< "\n\n";
+									<< index + 1 << ":" << endl
+									<< endl;
+							outfile << "\t%template_value" << index + 1 << endl
+									<< endl;
 						} else {
 							outfile << "\t"
 									<< types_to_string[function.input[index]]
-									<< "\n\n";
-							outfile << "\t%template_value\n\n";
+									<< endl
+									<< endl;
+							outfile << "\t%template_value" << endl << endl;
 						}
 					}
 				}
@@ -136,7 +144,7 @@ void Interpreter::generate_brief_templates() {
 
 			//========= Шаблон для выходных данных ===================
 
-			// Для автоматов
+			//Для автоматов
 			if (function.output == ObjectType::NFA ||
 				function.output == ObjectType::DFA) {
 				outfile << "\tАвтомат";
@@ -145,27 +153,27 @@ void Interpreter::generate_brief_templates() {
 					outfile << " после преобразования";
 				}
 
-				outfile << ":\n\n\t%template_result\n\n";
+				outfile << ":\n\n\t%template_result" << endl << endl;
 			}
 
-			// Для Regex, Int, Bool, optionalbool
+			//Для Regex, Int, Bool, optionalbool
 			if (function.output == ObjectType::AmbiguityValue ||
 				function.output == ObjectType::Int ||
 				function.output == ObjectType::Boolean ||
 				function.output == ObjectType::OptionalBool) {
-				outfile << "\tРезультат:\n";
+				outfile << "\tРезультат:" << endl;
 
-				outfile << "\t%template_result\n\n";
+				outfile << "\t%template_result" << endl << endl;
 			}
 
-			// Для префиксной грамматики
+			//Для префиксной грамматики
 			if (function.output == ObjectType::PrefixGrammar) {
-				outfile << "\tПрефиксная грамматика:\n\n";
+				outfile << "\tПрефиксная грамматика:" << endl << endl;
 
-				outfile << "\t%template_result\n\n";
+				outfile << "\t%template_result" << endl << endl;
 			}
 
-			// Для регулярок
+			//Для регулярок
 			if (function.output == ObjectType::Regex) {
 				outfile << "\tРегулярное выражение";
 
@@ -173,10 +181,10 @@ void Interpreter::generate_brief_templates() {
 					outfile << " после преобразования";
 				}
 
-				outfile << ":\n\t%template_result\n\n";
+				outfile << ":\n\t%template_result" << endl << endl;
 			}
 
-			outfile << "\\end{frame}\n";
+			outfile << "\\end{frame}" << endl;
 			outfile.close();
 		}
 	}
@@ -185,16 +193,16 @@ void Interpreter::generate_brief_templates() {
 
 void Interpreter::generate_test_for_all_functions() {
 	ofstream outfile("./resources/all_functions.txt");
-	outfile << "R = {a}\n";
-	outfile << "A = Determinize.Glushkov R\n";
-	outfile << "V = Ambiguity A\n";
-	outfile << "B = Deterministic A\n";
-	outfile << "P = PrefixGrammar A\n";
-	for (const auto& func_item : names_to_functions) {
-		for (const auto& function : func_item.second) {
+	outfile << "R = {a}" << endl;
+	outfile << "A = Determinize.Glushkov R" << endl;
+	outfile << "V = Ambiguity A" << endl;
+	outfile << "B = Deterministic A" << endl;
+	outfile << "P = PrefixGrammar A" << endl;
+	for (auto func_item : names_to_functions) {
+		for (auto function : func_item.second) {
 			string func_id = function.name;
 			outfile << "N = " << func_id;
-			for (const auto& arg : function.input) {
+			for (auto arg : function.input) {
 				if (arg == ObjectType::NFA || arg == ObjectType::DFA) {
 					outfile << " A";
 				} else if (arg == ObjectType::AmbiguityValue) {
@@ -212,7 +220,7 @@ void Interpreter::generate_test_for_all_functions() {
 					outfile << " 1";
 				}
 			}
-			outfile << "\n";
+			outfile << endl;
 		}
 	}
 }

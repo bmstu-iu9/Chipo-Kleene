@@ -2,6 +2,7 @@
 #include "Objects/FiniteAutomaton.h"
 #include "Objects/Language.h"
 #include "Objects/iLogTemplate.h"
+#include <set>
 
 Regex::Lexem::Lexem(Type type, const alphabet_symbol& symbol, int number)
 	: type(type), symbol(symbol), number(number) {}
@@ -378,7 +379,7 @@ Regex::Regex(const string& str) : Regex() {
 			throw runtime_error("Regex::from_string() ERROR");
 		}
 	} catch (const runtime_error& re) {
-		cout << re.what() << "\n";
+		cout << re.what() << endl;
 		exit(EXIT_FAILURE);
 	}
 }
@@ -388,14 +389,112 @@ Regex::Regex(const string& str, const shared_ptr<Language>& new_language)
 	language = new_language;
 }
 
-Regex Regex::normalize_regex(const vector<pair<Regex, Regex>>& rules,
-							 iLogTemplate* log) const {
-	Regex regex = *this;
+string upd_sym(string input, bool mode) {
+	if (mode)
+	{return "'" + input + "'";
+	}
+ else return input;
+}
+
+string Regex::to_refal_expr(map<string, string>* symbols, bool pattern) const {
+	string str1 = "", str2 = "";
+	if (term_l) {
+		str1 = term_l->to_refal_expr(symbols, pattern);
+	}
+	if (term_r) {
+		str2 = term_r->to_refal_expr(symbols, pattern);
+	}
+	string symb;
+	if (type == Type::conc) {
+		if (term_l && term_l->type == Type::alt) {
+			str1 = upd_sym("(",pattern) + str1 + upd_sym(")",pattern);
+		}
+		if (term_r && term_r->type == Type::alt) {
+			str2 = upd_sym("(",pattern) + str2 + upd_sym(")",pattern);
+		}
+	}
+	if (type == Type::symb /*value.symbol*/) {
+		string temp = value.symbol;
+		if (!pattern) {symb = temp;}
+		else
+		{if (symbols->count(temp) != 0) {
+			symb = (*symbols)[temp];
+		} else {
+			(*symbols)[temp] = " e." + to_string(symbols->size() + 1) + " ";
+			symb = (*symbols)[temp];
+		}
+	  }}
+	if (type == Type::eps) symb = "";
+	if (type == Type::alt) symb = upd_sym("|",pattern);
+	if (type == Type::star) {
+		symb = upd_sym("*",pattern);
+	/*	if (term_l->type != Type::symb)       */
+			str1 = upd_sym("(",pattern) + str1 + upd_sym(")",pattern); // ставим скобки при итерации, если символов > 1
+	}
+	if (type == Type::alt) return upd_sym("(",pattern) + str1 + symb + str2 + upd_sym(")",pattern);
+	return str1 + symb + str2;
+}
+string Regex::get_refal_rewrite_rule(pair<Regex, Regex> rule) const {
+	map<string, string> temp;
+	string out;
+	out += "e.R, e.R : e.0 ";
+	out += rule.first.to_refal_expr(&temp, true);
+	out += "e.";
+	out += to_string(temp.size() + 1);
+	for (int i = 1; i <= temp.size(); i++) {
+		out += ",\n\t <Balanced (('()')) e." +
+			   to_string(i) + "> : True";
+	}
+
+	out += " ";
+	out += "=<Normalize ";
+	out += "e.0 ";
+	out += rule.second.to_refal_expr(&temp, true);
+	out += "e.";
+	out += to_string(temp.size() + 1);
+	out += " ";
+	out += ">;\n\t";
+	return out;
+}
+void Regex::create_normalize_refal_code(
+	const vector<pair<Regex, Regex>>& rules) const {
+	system("cd ./refal && COPY normalize_template.ref normalize.ref > nul");
+	std::ofstream fout("./refal/normalize.ref", std::ios::app);
+	if (fout.is_open()) {
+		fout << "\nNormalize {\n\t";
+		for (int i = 0; i < rules.size(); i++) {
+			fout << get_refal_rewrite_rule(rules[i]);
+		}
+		fout << " e.1 = e.1;\n}\n";
+	}
+	fout.close();
+}
+Regex Regex::normalize_regex(const vector<pair<Regex, Regex>>& rules, iLogTemplate* log) const {
+	create_normalize_refal_code(rules);
+	ofstream fout("./refal/out.txt");
+	map<string, string> temp;
+	fout << to_refal_expr(&temp, false) << endl;
+	fout.close();
+	system("cd refal && COPY normalize.ref test.ref > nul");
+	system("cd refal && refc normalize.ref > reflog0.txt && refgo normalize");
+	ifstream infile_for_R("./refal/in.txt");
+	string s;
+	stringstream newregex;
+
+	while (!infile_for_R.eof()) {
+		getline(infile_for_R, s);
+		newregex << s;
+	}
+	infile_for_R.close();
+	Regex out(newregex.str());
 	if (log) {
 		log->set_parameter("oldregex", *this);
+		log->set_parameter("result", out);
 	}
-	return regex;
+	system("cd refal && DEL normalize.ref && DEL normalize.rsl");
+	return out;
 }
+
 bool Regex::from_string(const string& str) {
 	if (!str.size()) {
 		value = Regex::Lexem::eps;
@@ -605,7 +704,7 @@ pair<vector<State>, int> Regex::get_thompson(int max_index) const {
 
 		for (size_t i = 0; i < al.first.size(); i++) {
 			State test = al.first[i];
-			for (const auto& el : test.transitions) {
+			for (auto el : test.transitions) {
 				alphabet_symbol elem = el.first; // al->alphabet[i];
 				trans = {};
 				for (int transition_to : test.transitions[elem]) {
@@ -625,7 +724,7 @@ pair<vector<State>, int> Regex::get_thompson(int max_index) const {
 		offset = s.size();
 		for (size_t i = 0; i < ar.first.size(); i++) {
 			State test = ar.first[i];
-			for (const auto& el : test.transitions) {
+			for (auto el : test.transitions) {
 				alphabet_symbol elem = el.first;
 				trans = {};
 				for (int transition_to : test.transitions[elem]) {
@@ -655,7 +754,7 @@ pair<vector<State>, int> Regex::get_thompson(int max_index) const {
 
 		for (size_t i = 0; i < al.first.size(); i++) {
 			State test = al.first[i];
-			for (const auto& el : test.transitions) {
+			for (auto el : test.transitions) {
 				alphabet_symbol elem = el.first; // al->alphabet[i];
 				trans = {};
 				for (int transition_to : test.transitions[elem]) {
@@ -666,7 +765,7 @@ pair<vector<State>, int> Regex::get_thompson(int max_index) const {
 
 			if (test.is_terminal) {
 				State test_r = ar.first[0];
-				for (const auto& el : test_r.transitions) {
+				for (auto el : test_r.transitions) {
 					alphabet_symbol elem = el.first; // al->alphabet[i];
 					for (int transition_to : test_r.transitions[elem]) {
 						// trans.push_back(test.transitions[elem][j] + 1);
@@ -682,7 +781,7 @@ pair<vector<State>, int> Regex::get_thompson(int max_index) const {
 		offset = s.size();
 		for (size_t i = 1; i < ar.first.size(); i++) {
 			State test = ar.first[i];
-			for (const auto& el : test.transitions) {
+			for (auto el : test.transitions) {
 				alphabet_symbol elem = el.first; // al->alphabet[i];
 				trans = {};
 				// alfa.push_back(elem);
@@ -709,7 +808,7 @@ pair<vector<State>, int> Regex::get_thompson(int max_index) const {
 		for (size_t i = 0; i < al.first.size(); i++) {
 			State test;
 			test = al.first[i];
-			for (const auto& el : test.transitions) {
+			for (auto el : test.transitions) {
 				alphabet_symbol elem = el.first; // al->alphabet[i];
 				trans = {};
 				for (int transition_to : test.transitions[elem]) {
@@ -756,11 +855,15 @@ pair<vector<State>, int> Regex::get_thompson(int max_index) const {
 }
 
 FiniteAutomaton Regex::to_thompson(iLogTemplate* log) const {
+	// Logger::init_step("Автомат Томпсона");
+	// Logger::log("Регулярное выражение", to_txt());
 	FiniteAutomaton fa(0, get_thompson(-1).first, language);
 	if (log) {
 		log->set_parameter("oldregex", *this);
 		log->set_parameter("result", fa);
 	}
+	// Logger::log("Автомат", fa);
+	// Logger::finish_step();
 	return fa;
 }
 
@@ -932,6 +1035,7 @@ bool Regex::is_term(int number, const vector<Regex::Lexem>& list) const {
 	return false;
 }
 Regex Regex::linearize(iLogTemplate* log) const {
+	// Logger::init_step("Linearise");
 	Regex test(*this);
 	vector<Regex*> list = test.pre_order_travers_vect();
 	set<alphabet_symbol> lang_l;
@@ -944,10 +1048,13 @@ Regex Regex::linearize(iLogTemplate* log) const {
 		log->set_parameter("oldregex", *this);
 		log->set_parameter("linearised regex", test);
 	}
+	// Logger::log(test.to_txt());
+	// Logger::finish_step();
 	return test;
 }
 
 Regex Regex::delinearize(iLogTemplate* log) const {
+	// Logger::init_step("DeLinearise");
 	Regex test(*this);
 	vector<Regex*> list = test.pre_order_travers_vect();
 	set<alphabet_symbol> lang_del;
@@ -960,10 +1067,13 @@ Regex Regex::delinearize(iLogTemplate* log) const {
 		log->set_parameter("oldregex", *this);
 		log->set_parameter("result", test);
 	}
+	// Logger::log(test.to_txt());
 	return test;
 }
 
 FiniteAutomaton Regex::to_glushkov(iLogTemplate* log) const {
+
+	// Logger::init_step("Автомат Глушкова");
 
 	Regex test(*this);
 	vector<Regex*> list = test.pre_order_travers_vect();
@@ -1014,6 +1124,10 @@ FiniteAutomaton Regex::to_glushkov(iLogTemplate* log) const {
 	// cout << "End " << str_end << endl;
 	// cout << "Pairs " << str_pair << endl;
 
+	/*Logger::log("Регулярка", test.to_txt());
+	Logger::log("First", str_first);
+	Logger::log("End", str_end);
+	Logger::log("Pairs", str_pair);*/
 	vector<Regex> list_annote;
 	for (size_t i = 0; i < list.size(); i++) {
 		list_annote.push_back(*list[i]);
@@ -1052,10 +1166,13 @@ FiniteAutomaton Regex::to_glushkov(iLogTemplate* log) const {
 		log->set_parameter("pairs", str_pair);
 		log->set_parameter("result", fa);
 	}
+	// Logger::log("Автомат", fa);
+	// Logger::finish_step();
 	return fa;
 }
 
 FiniteAutomaton Regex::to_ilieyu(iLogTemplate* log) const {
+	// Logger::init_step("Автомат Илия–Ю");
 	FiniteAutomaton glushkov = this->to_glushkov();
 	vector<State> states = glushkov.states;
 	vector<int> follow;
@@ -1067,9 +1184,7 @@ FiniteAutomaton Regex::to_ilieyu(iLogTemplate* log) const {
 			map<alphabet_symbol, set<int>> map2 = st2.transitions;
 			bool flag = true;
 			if (i == j || map2.size() != map1.size() ||
-				st1.is_terminal != st2.is_terminal) {
-				continue;
-			}
+				st1.is_terminal != st2.is_terminal) { continue;}
 
 			for (auto& it1 : map1) {
 				set<int> v1 = it1.second;
@@ -1106,6 +1221,9 @@ FiniteAutomaton Regex::to_ilieyu(iLogTemplate* log) const {
 	}
 
 	// cout << str_follow;
+	// Logger::log("Регулярное выражение", to_txt());
+	// Logger::log("Автомат Глушкова", glushkov);
+	// Logger::log("Follow-отношения", str_follow);
 
 	for (size_t i = 0; i < new_states.size(); i++) {
 		State v1 = new_states[i];
@@ -1136,6 +1254,8 @@ FiniteAutomaton Regex::to_ilieyu(iLogTemplate* log) const {
 		log->set_parameter("follow", str_follow);
 		log->set_parameter("result", fa);
 	}
+	// Logger::log("Автомат", fa);
+	// Logger::finish_step();
 	return fa;
 }
 bool Regex::is_eps_possible() {
@@ -1194,7 +1314,7 @@ void Regex::get_prefix(int len, std::set<std::string>* prefs) const {
 			term_r->get_prefix(len - k, prefs2);
 			for (auto i = prefs1->begin(); i != prefs1->end(); i++) {
 				for (auto j = prefs2->begin(); j != prefs2->end(); j++) {
-					prefs->insert(*i + *j);
+					if (prefix_derivative(*i + *j)) prefs->insert(*i + *j);
 				}
 			}
 			prefs1->clear();
@@ -1215,7 +1335,7 @@ void Regex::get_prefix(int len, std::set<std::string>* prefs) const {
 			get_prefix(len - k, prefs2);
 			for (auto i = prefs1->begin(); i != prefs1->end(); i++) {
 				for (auto j = prefs2->begin(); j != prefs2->end(); j++) {
-					prefs->insert(*i + *j);
+					if (prefix_derivative(*i + *j)) prefs->insert(*i + *j);
 				}
 			}
 			prefs1->clear();
@@ -1336,6 +1456,26 @@ bool Regex::derivative_with_respect_to_sym(Regex* respected_sym,
 	}
 }
 
+void Regex::eps_removing() {
+	switch (type) {
+	case Type::alt:
+	case Type::conc:
+		term_l->eps_removing();
+		term_r->eps_removing();
+		if (term_l->type == Type::eps && term_r->type == Type::eps) {
+			clear();
+			type = Type::eps;
+		}
+		break;
+	case Type::star:
+		term_l->eps_removing();
+		if (term_l->type == Type::eps) {
+			clear();
+			type = Type::eps;
+		}
+	}
+}
+
 bool Regex::partial_derivative_with_respect_to_sym(
 	Regex* respected_sym, const Regex* reg_e, vector<Regex>& result) const {
 	Regex cur_result;
@@ -1413,21 +1553,37 @@ bool Regex::partial_derivative_with_respect_to_sym(
 	}
 }
 
+bool Regex::get_symbols_from_string(vector<Regex>& res){
+	if (type == Type::symb) {
+		res.push_back(*this);
+		return true;
+	}
+	if (type == Regex::conc) {
+		vector<Regex> resl, resr;
+		term_l->get_symbols_from_string(resl);
+		term_r->get_symbols_from_string(resr);
+		for (int i = 0; i < resl.size(); i++) {
+			res.push_back(resl[i]);
+		}
+		for (int i = 0; i < resr.size(); i++) {
+			res.push_back(resr[i]);
+		}
+		return true;
+	}
+	return false;
+}
+
 bool Regex::derivative_with_respect_to_str(std::string str, const Regex* reg_e,
 										   Regex& result) const {
 	bool success = true;
 	Regex cur = *reg_e;
 	Regex next = *reg_e;
-	// cout << "start getting derevative for prefix " << str << " in "
-	//	 << reg_e->to_txt() << "\n";
-	for (int i = 0; i < str.size(); i++) {
-		Regex sym;
-		sym.type = Type::symb;
-		sym.value.symbol = str[i];
-		next.clear();
-		success &= derivative_with_respect_to_sym(&sym, &cur, next);
-		// cout << "derevative for prefix " << sym->to_txt() << " in "
-		//	 << cur.to_txt() << " is " << next.to_txt() << "\n";
+	Regex symbols;
+	symbols.from_string(str);
+	vector<Regex> syms;
+	symbols.get_symbols_from_string(syms);
+	for (int i = 0; i < syms.size(); i++) {
+		success &= derivative_with_respect_to_sym(&syms[i], &cur, next);
 		if (!success) {
 			return false;
 		}
@@ -1471,9 +1627,10 @@ std::optional<Regex> Regex::prefix_derivative(std::string respected_str) const {
 }
 // Длина накачки
 int Regex::pump_length(iLogTemplate* log) const {
-	if (language->is_pump_length_cached()) {
+	if (log) log->set_parameter("oldregex", *this);
+	if (language->pump_length_cached()) {
 		if (log) {
-			log->set_parameter("pumplength", language->get_pump_length());
+			log->set_parameter("pumplength1", language->get_pump_length());
 			log->set_parameter("cach", "(!) результат получен из кэша");
 		}
 		return language->get_pump_length();
@@ -1485,10 +1642,11 @@ int Regex::pump_length(iLogTemplate* log) const {
 		if (prefs.empty()) {
 			language->set_pump_length(i);
 			if (log) {
-				log->set_parameter("pumplength", i);
+				log->set_parameter("pumplength1", i);
 			}
 			return i;
 		}
+		bool pumped = true;
 		for (auto it = prefs.begin(); it != prefs.end(); it++) {
 			bool was = false;
 			for (int j = 0; j < it->size(); j++) {
@@ -1498,38 +1656,48 @@ int Regex::pump_length(iLogTemplate* log) const {
 				}
 			}
 			if (was) continue;
-			for (int j = 0; j < it->size(); j++) {
-				for (int k = j + 1; k <= it->size(); k++) {
-					Regex pumping;
-					std::string pumped_prefix;
-					pumped_prefix += it->substr(0, j);
-					pumped_prefix += "(" + it->substr(j, k - j) + ")*";
-					pumped_prefix += it->substr(k, it->size() - k + j);
-					Regex a(pumped_prefix);
-					Regex b;
-					pumping.regex_union(&a, &b);
-					if (!derivative_with_respect_to_str(*it, this,
-														*pumping.term_r))
-						continue;
-					pumping.generate_alphabet(pumping.alphabet);
-					pumping.language = make_shared<Language>(pumping.alphabet);
-					// cout << pumped_prefix << " " << pumping.term_r->to_txt();
-					if (subset(pumping)) {
-						checked_prefixes[*it] = true;
-						language->set_pump_length(i);
-						/*cout << *it << "\n";
-						cout << pumping.to_txt() << "\n";
-						cout << to_txt() << "\n";
-						cout << subset(pumping) << "\n";
-						Regex pump2;
-						cout << subset(pump2);*/
-						if (log) {
-							log->set_parameter("pumplength", i);
-						}
-						return i;
-					}
+			bool infix_pumped = false;
+			Regex pref(*it);
+			vector<Regex> symbols;
+			pref.get_symbols_from_string(symbols);
+			for (int j = 0; j < symbols.size(); j++) {
+				std::string pumped_prefix;
+				for (int k = 0; k < j; k++) {
+					pumped_prefix += symbols[k].value.symbol;
+				}
+				pumped_prefix += "(";
+				for (int k = j; k < symbols.size(); k++) {
+					pumped_prefix += symbols[k].value.symbol;
+				}
+				pumped_prefix += ")*";
+				Regex a;
+				if (!derivative_with_respect_to_str(*it, this, a)) {
+					continue;
+				}
+				a.eps_removing();
+				if (a.to_txt() != "")
+					pumped_prefix += "(" + a.to_txt() + ")";
+				Regex pumping(pumped_prefix);
+				if (subset(pumping)) {
+					checked_prefixes[*it] = true;
+					infix_pumped = true;
+					break;
 				}
 			}
+			pumped &= infix_pumped;
+		}
+		std::string ch_prefixes;
+		for (auto it = checked_prefixes.begin(); it != checked_prefixes.end();
+			 it++) {
+			if (it->second) ch_prefixes += it->first + "\\\\";
+		}
+		if (pumped) {
+			language->set_pump_length(i);
+			if (log) {
+				log->set_parameter("pumplength1", i);
+				log->set_parameter("pumplength2", ch_prefixes);
+			}
+			return i;
 		}
 	}
 }
@@ -1556,7 +1724,15 @@ bool Regex::equality_checker(const Regex* r1, const Regex* r2) {
 }
 
 bool Regex::equal(const Regex& r1, const Regex& r2, iLogTemplate* log) {
+	// Logger::init_step("Equal");
+	// Logger::log("Первое регулярное выражение", r1.to_txt());
+	// Logger::log("Второе регулярное выражение", r2.to_txt());
 	bool result = equality_checker(&r1, &r2);
+	/*if (result)
+		Logger::log("Результат Equal", "true");
+	else
+		Logger::log("Результат Equal", "false");
+	Logger::finish_step();*/
 	if (log) {
 		log->set_parameter("regex1", r1);
 		log->set_parameter("regex2", r2);
@@ -1566,17 +1742,27 @@ bool Regex::equal(const Regex& r1, const Regex& r2, iLogTemplate* log) {
 }
 
 bool Regex::equivalent(const Regex& r1, const Regex& r2, iLogTemplate* log) {
+	// Logger::init_step("Equiv");
+	// Logger::log("Первое регулярное выражение", r1.to_txt());
+	// Logger::log("Второе регулярное выражение", r2.to_txt());
 	bool result = true;
 	if (r1.language == r2.language) {
 		if (log)
 			log->set_parameter(
 				"samelanguage",
 				"(!) регулярные выражения изначально принадлежат одному языку");
+		// Logger::log(
+		//"(!) регулярные выражения изначально принадлежат одному языку");
 	} else {
 		FiniteAutomaton fa1 = r1.to_ilieyu();
 		FiniteAutomaton fa2 = r2.to_ilieyu();
 		result = FiniteAutomaton::equivalent(fa1, fa2);
 	}
+	/*if (result)
+		Logger::log("Результат Equiv", "true");
+	else
+		Logger::log("Результат Equiv", "false");
+	Logger::finish_step();*/
 	if (log) {
 		log->set_parameter("regex1", r1);
 		log->set_parameter("regex2", r2);
@@ -1586,7 +1772,15 @@ bool Regex::equivalent(const Regex& r1, const Regex& r2, iLogTemplate* log) {
 }
 
 bool Regex::subset(const Regex& r, iLogTemplate* log) const {
+	// Logger::init_step("Subset");
+	// Logger::log("Первое регулярное выражение", to_txt());
+	// Logger::log("Второе регулярное выражение", r.to_txt());
 	bool result = to_ilieyu().subset(r.to_ilieyu());
+	/*if (result)
+		Logger::log("Результат Subset", "true");
+	else
+		Logger::log("Результат Subset", "false");
+	Logger::finish_step();*/
 	if (log) {
 		log->set_parameter("regex1", *this);
 		log->set_parameter("regex2", r);
@@ -1596,6 +1790,8 @@ bool Regex::subset(const Regex& r, iLogTemplate* log) const {
 }
 
 FiniteAutomaton Regex::to_antimirov(iLogTemplate* log) const {
+	// Logger::init_step("Автомат Антимирова");
+	// Logger::log("Регулярное выражение", to_txt());
 	map<set<string>, set<string>> trans;
 	vector<Regex> states;
 	vector<Regex> alph_regex;
@@ -1650,6 +1846,7 @@ FiniteAutomaton Regex::to_antimirov(iLogTemplate* log) const {
 			} else {
 				deriv_log += out[j][1].to_txt() + "\\\\";
 			}
+			// Logger::log(deriv_log);
 			if (out[j][0].to_txt() == state) {
 				auto n = find(name_states.begin(), name_states.end(),
 							  out[j][1].to_txt());
@@ -1672,6 +1869,11 @@ FiniteAutomaton Regex::to_antimirov(iLogTemplate* log) const {
 		str_state += automat_state[i].identifier + "\\\\ ";
 	}
 
+	// cout << deriv_log;
+	// cout << str_state << endl;
+	// //Logger::log(deriv_log, str_state);
+	// Logger::log(str_state);
+
 	FiniteAutomaton fa(0, automat_state, language);
 	if (log) {
 		log->set_parameter("oldregex", *this);
@@ -1679,11 +1881,15 @@ FiniteAutomaton Regex::to_antimirov(iLogTemplate* log) const {
 		log->set_parameter("state", str_state);
 		log->set_parameter("result", fa);
 	}
+	// Logger::log("Автомат", fa);
+	// Logger::finish_step();
 	return fa;
 }
 
 Regex Regex::deannote(iLogTemplate* log) const {
+	// Logger::init_step("DeAnnote");
 	Regex test(*this);
+	// Logger::log("Регулярное выражение до преобразования", test.to_txt());
 	vector<Regex*> list = test.pre_order_travers_vect();
 	set<alphabet_symbol> lang_deann;
 	for (size_t i = 0; i < list.size(); i++) {
@@ -1695,6 +1901,8 @@ Regex Regex::deannote(iLogTemplate* log) const {
 		log->set_parameter("oldregex", *this);
 		log->set_parameter("result", test);
 	}
+	/*Logger::log("Регулярное выражение после преобразования", test.to_txt());
+	Logger::finish_step();*/
 	return test;
 }
 
@@ -1731,8 +1939,11 @@ bool Regex::is_one_unambiguous(iLogTemplate* log) const {
 	if (log) {
 		log->set_parameter("oldregex", *this);
 	}
+	// Logger::init_step("OneUnambiguity");
 	FiniteAutomaton fa = to_glushkov();
 	bool res = fa.is_deterministic();
+	// Logger::log(res ? "True" : "False");
+	// Logger::finish_step();
 	if (log) {
 		log->set_parameter("result", res ? "True" : "False");
 	}
@@ -1740,21 +1951,27 @@ bool Regex::is_one_unambiguous(iLogTemplate* log) const {
 }
 
 Regex Regex::get_one_unambiguous_regex(iLogTemplate* log) const {
+	// Logger::init_step("OneUnambiguityRegex");
 	if (log) {
 		log->set_parameter("oldregex", *this);
 	}
 	FiniteAutomaton fa = to_glushkov();
 	if (fa.language->is_one_unambiguous_regex_cached()) {
+		// Logger::log("1-однозначное регулярное выражение, описывающее язык",
+		// 			fa.language->get_one_unambiguous_regex().to_txt());
+		// Logger::finish_step();
 		if (log) {
 			log->set_parameter("result",
 							   fa.language->get_one_unambiguous_regex());
-			log->set_parameter("cache",
+			log->set_parameter("cach",
 							   "(!) результат OneUnambiguous получен из кэша");
 		}
 		return fa.language->get_one_unambiguous_regex();
 	}
 	if (!fa.language->is_one_unambiguous_flag_cached()) fa.is_one_unambiguous();
 	if (!fa.language->get_one_unambiguous_flag()) {
+		// Logger::log("Язык не является 1-однозначным");
+		// Logger::finish_step();
 		if (log) {
 			log->set_parameter("result", "Язык не является 1-однозначным");
 		}
@@ -1762,7 +1979,7 @@ Regex Regex::get_one_unambiguous_regex(iLogTemplate* log) const {
 	}
 	string regl;
 	FiniteAutomaton min_fa;
-	if (!fa.language->is_min_dfa_cached() && log) {
+	if (!fa.language->min_dfa_cached() && log) {
 		log->set_parameter("cachedMINDFA",
 						   "Минимальный автомат сохранен в кэше");
 	}
@@ -1770,6 +1987,8 @@ Regex Regex::get_one_unambiguous_regex(iLogTemplate* log) const {
 		min_fa = fa.minimize();
 	else
 		min_fa = fa.minimize().remove_trap_states();
+
+	
 
 	set<map<alphabet_symbol, set<int>>> final_states_transitions;
 	for (int i = 0; i < min_fa.states.size(); i++) {
@@ -1794,16 +2013,10 @@ Regex Regex::get_one_unambiguous_regex(iLogTemplate* log) const {
 		}
 		for (int elem : reachable_by_symb) {
 			is_symb_min_fa_consistent = true;
-			for (const auto& final_state_transitions :
-				 final_states_transitions) {
-				// Из автомата удаляется ловушка,
-				// поэтому не по всем буквам есть переходы
-				if (final_state_transitions.find(symb) ==
-					final_state_transitions.end())
-					continue;
-				if (find(final_state_transitions.at(symb).begin(),
-						 final_state_transitions.at(symb).end(),
-						 elem) == final_state_transitions.at(symb).end()) {
+			for (auto final_state_transitions : final_states_transitions) {
+				if (find(final_state_transitions[symb].begin(),
+						 final_state_transitions[symb].end(),
+						 elem) == final_state_transitions[symb].end()) {
 					is_symb_min_fa_consistent = false;
 					break;
 				}
@@ -1924,6 +2137,8 @@ Regex Regex::get_one_unambiguous_regex(iLogTemplate* log) const {
 		counter++;
 	}
 	if (counter) regl += ")*";
+	// Logger::log("1-однозначное регулярное выражение, описывающее язык",
+	// regl); Logger::finish_step();
 	language->set_one_unambiguous_regex(regl, fa.language);
 	Regex res = language->get_one_unambiguous_regex();
 	if (log) {

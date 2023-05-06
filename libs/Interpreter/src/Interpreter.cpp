@@ -97,7 +97,7 @@ Interpreter::Interpreter() {
 		  {"OneUnambiguity", {ObjectType::NFA}, ObjectType::Boolean}}},
 		{"SemDet", {{"SemDet", {ObjectType::NFA}, ObjectType::Boolean}}}};
 	// generate_brief_templates();
-	// generate_test_for_all_functions();
+	//generate_test_for_all_functions();
 }
 
 bool Interpreter::run_line(const string& line) {
@@ -117,6 +117,7 @@ bool Interpreter::run_line(const string& line) {
 }
 
 bool Interpreter::run_file(const string& path) {
+	srand( (unsigned)time(NULL) );
 	auto logger = init_log();
 	logger.log("opening file " + path);
 	ifstream input_file(path);
@@ -197,7 +198,7 @@ optional<GeneralObject> Interpreter::apply_function_sequence(
 		} else {
 			return nullopt;
 		}
-		tex_logger.add_log(log_template);
+		if (flags[Flag::report]) tex_logger.add_log(log_template);
 	}
 
 	return arguments[0];
@@ -227,14 +228,7 @@ optional<GeneralObject> Interpreter::apply_function(
 
 	// имя шаблона по умолчанию - название ф/и в интерпретаторе + номер
 	// сигнатуры (если их несколько)
-	string func_id;
-	if (auto str = get_func_id(function); str.has_value()) {
-		func_id = str.value();
-	} else {
-		cerr << "Unable to get function id by name " + function.name + "\n";
-		cerr << *((int*)0);
-		return GeneralObject();
-	}
+	string func_id = get_func_id(function);
 
 	log_template.load_tex_template(func_id);
 	log_template.set_theory_flag(flags[Flag::log_theory]);
@@ -510,6 +504,7 @@ optional<GeneralObject> Interpreter::apply_function(
 
 	if (res.has_value()) {
 		GeneralObject resval = res.value();
+		// Logger::activate_step_counter();
 
 		if (holds_alternative<ObjectRegex>(resval) &&
 			holds_alternative<ObjectRegex>(predres)) {
@@ -526,10 +521,12 @@ optional<GeneralObject> Interpreter::apply_function(
 						   "\" has left automaton unchanged");
 			}
 
+		// Logger::deactivate_step_counter();
 		return res.value();
 	}
 
-	cerr << "Функция " + function.name + " страшная и мне не известная O_O\n";
+	cerr << "Функция " + function.name + " страшная и мне не известная O_O"
+		 << endl;
 
 	// FIXME: Ошибка *намеренно* вызывает сегфолт.
 	//          Придумай что-нибудь!
@@ -576,14 +573,12 @@ optional<int> Interpreter::find_func(string func,
 	return nullopt;
 }
 
-optional<string> Interpreter::get_func_id(Function function) {
-	string func_id = function.name;
-	if (names_to_functions[function.name].size() > 1) {
-		optional<int> id = find_func(function.name, function.input);
-		if (!id.has_value()) return nullopt;
-		func_id += to_string(id.value() + 1);
+string Interpreter::get_func_id(Function function) {
+	string id = function.name;
+	if (names_to_functions[id].size() > 1) {
+		id += to_string(find_func(function.name, function.input).value() + 1);
 	}
-	return func_id;
+	return id;
 }
 
 optional<vector<Interpreter::Function>> Interpreter::build_function_sequence(
@@ -776,6 +771,12 @@ bool Interpreter::run_declaration(const Declaration& decl) {
 	auto logger = init_log();
 	logger.log("");
 	logger.log("Running declaration...");
+	/*if (decl.show_result) {
+		// Logger::activate();
+		logger.log("logger is activated for this task");
+	} else {
+		// Logger::deactivate();
+	}*/
 	if (const auto& expr = eval_expression(decl.expr); expr.has_value()) {
 		objects[decl.id] = *expr;
 	} else {
@@ -783,6 +784,7 @@ bool Interpreter::run_declaration(const Declaration& decl) {
 		return false;
 	}
 	logger.log("assigned to " + decl.id);
+	// Logger::deactivate();
 	return true;
 }
 
@@ -790,6 +792,7 @@ bool Interpreter::run_predicate(const Predicate& pred) {
 	auto logger = init_log();
 	logger.log("");
 	logger.log("Running predicate...");
+	// Logger::activate();
 
 	FunctionSequence seq;
 	seq.functions = {pred.predicate};
@@ -814,6 +817,7 @@ bool Interpreter::run_predicate(const Predicate& pred) {
 		success = false;
 	}
 
+	// Logger::deactivate();
 	return success;
 }
 
@@ -821,6 +825,7 @@ bool Interpreter::run_test(const Test& test) {
 	auto logger = init_log();
 	logger.log("");
 	logger.log("Running test...");
+	// Logger::activate();
 
 	auto language = eval_expression(test.language);
 	auto test_set = eval_expression(test.test_set);
@@ -855,6 +860,7 @@ bool Interpreter::run_test(const Test& test) {
 
 	tex_logger.add_log(log_template);
 
+	// Logger::deactivate();
 	return success;
 }
 
@@ -865,9 +871,9 @@ bool Interpreter::run_verification(const Verification& verification) {
 	bool success = true;
 	int results = 0;
 	int tests_size = verification.size;
-	int tests_false_num = min(10, (int)ceil(verification.size * 0.1));
+	int tests_false_num = min(10, max(10, (int)ceil(verification.size * 0.1)));
 	vector<string> regex_list;
-	RegexGenerator RG; // TODO: менять параметры
+	RegexGenerator RG(10, 4, 3, 2); // TODO: менять параметры
 	Expression expr = verification.predicate;
 
 	LogTemplate log_template;
@@ -875,10 +881,8 @@ bool Interpreter::run_verification(const Verification& verification) {
 	log_template.set_theory_flag(flags[Flag::log_theory]);
 	log_template.set_parameter("expr", expr.to_txt());
 
-	LogMode prev_log_mode = log_mode;
-	if (prev_log_mode == LogMode::all) set_log_mode(LogMode::errors);
-
-	tex_logger.disable();
+	set_log_mode(LogMode::errors);
+	flags[Flag::report] = false;
 
 	for (int i = 0; i < verification.size; i++) {
 		// подстановка равных Regex на место '*'
@@ -900,8 +904,8 @@ bool Interpreter::run_verification(const Verification& verification) {
 		}
 	}
 
-	tex_logger.enable();
-	set_log_mode(prev_log_mode);
+	flags[Flag::report] = true;
+	set_log_mode(LogMode::all);
 
 	current_random_regex = nullopt;
 

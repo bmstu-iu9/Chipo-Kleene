@@ -139,6 +139,64 @@ void TransformationMonoid::get_new_transition(
 		queueTerm.push(curTerm);
 	}
 }
+bool TransformationMonoid::check_poly_ambiguity() {
+ // cout << to_txt();
+ set<int> candidates;
+ cout << "Checking transition monoid..." << endl;
+ for (int k=0; k < terms.size(); k++) {
+  candidates.clear();
+  for (int i=0; i < terms[k].transitions.size(); i++) { 
+	if (terms[k].transitions[i].first == terms[k].transitions[i].second) {candidates.insert(terms[k].transitions[i].first);
+	// cout << "Self loop in term" << alphabet_symbol::vector_to_str(terms[k].name) <<" to state:" << terms[k].transitions[i].first << endl;  
+	}
+	}
+  for (int j=0; j < terms[k].transitions.size(); j++) {	
+	if  ((candidates.find(terms[k].transitions[j].first) != candidates.end()) &&
+		(candidates.find(terms[k].transitions[j].second) != candidates.end()) && 
+		(terms[k].transitions[j].first != terms[k].transitions[j].second)) {return true;} }
+}
+return false;
+}
+
+bool TransformationMonoid::check_exp_ambiguity(int states_num) {
+// cout << to_txt();
+ set<vector<set<int>>> from_init;
+ set<vector<set<int>>> to_init;
+ vector<set<int>> current_from_init(states_num);
+ vector<set<int>> current_to_init(states_num);
+ set<int> intersect;
+ cout << "Checking transition monoid..." << endl;
+ for (int k=0; k < terms.size(); k++) {
+	for (int j =0; j < states_num; j++) {
+	current_from_init[j].clear();
+	current_to_init[j].clear();
+	}
+  	for (int i=0; i < terms[k].transitions.size(); i++) {
+		current_from_init[terms[k].transitions[i].first].insert(terms[k].transitions[i].second); 
+		current_to_init[terms[k].transitions[i].second].insert(terms[k].transitions[i].first); 
+		}
+	for (int j=0; j < states_num ; j++) {
+	if (current_from_init[j].size() >= 2) { 
+		for (auto to_set : to_init)
+		 { intersect.clear();
+			  set_intersection(to_set[j].begin(), to_set[j].end(),
+                            current_from_init[j].begin(), current_from_init[j].end(), inserter(intersect, intersect.begin()));
+		 	 if (intersect.size() >= 2) return true;
+	 	} 
+		from_init.insert(current_from_init); }
+	if (current_to_init.size() >= 2) {	
+	for (auto from_set : from_init) 
+	 { intersect.clear();
+		  set_intersection(from_set[j].begin(), from_set[j].end(),
+                            current_to_init[j].begin(), current_to_init[j].end(), inserter(intersect, intersect.begin()));
+		  if (intersect.size() >= 2) return true;
+	 }  
+	to_init.insert(current_to_init);  
+	}
+	}
+}
+return false;
+}
 
 TransformationMonoid::TransformationMonoid(){};
 TransformationMonoid::TransformationMonoid(const FiniteAutomaton& in) {
@@ -146,8 +204,8 @@ TransformationMonoid::TransformationMonoid(const FiniteAutomaton& in) {
 	int states_counter_new = 0;
 	states_counter_old =
 		in.states.size(); // для проверки ловушки на минимальность
-
-	automat = in.remove_trap_states(); // удаляем ловушки
+	cout << "Creating transition monoid..." << endl;
+	automat = in.remove_eps().remove_trap_states(); // удаляем ловушки
 	states_counter_new = automat.states.size();
 	if (states_counter_old - states_counter_new > 1) {
 		trap_not_minimal = true;
@@ -161,13 +219,14 @@ TransformationMonoid::TransformationMonoid(const FiniteAutomaton& in) {
 	}
 	// cout << automat.to_txt();
 	vector<TransformationMonoid::Transition>
-		initperehods; // получаем состояния по eps переходу (из себя в себя)
+		initperehods; // получаем состояния по eps переходу (из себя в себя)	
 	for (int i = 0; i < automat.states.size(); i++) {
 		TransformationMonoid::Transition temp;
 		temp.first = i;
 		temp.second = i;
 		initperehods.push_back(temp);
 	}
+
 	get_new_transition(initperehods, {}, automat.language->get_alphabet());
 	while (queueTerm.size() > 0) { // пока есть кандидаты
 		TransformationMonoid::Term cur = queueTerm.front();
@@ -189,9 +248,11 @@ TransformationMonoid::TransformationMonoid(const FiniteAutomaton& in) {
 				terms.push_back(cur);
 				get_new_transition(cur.transitions, cur.name,
 								   automat.language->get_alphabet());
+
 			}
 		}
 	}
+//  cout << to_txt();
 }
 
 string TransformationMonoid::to_txt() {
@@ -205,12 +266,15 @@ string TransformationMonoid::to_txt() {
 	for (int i = 0; i < terms.size(); i++) {
 		ss << "  class " << alphabet_symbol::vector_to_str(terms[i].name)
 		   << "\n";
-		vector<TransformationMonoid::Term> vw =
+		for (int j = 0; j < terms[i].transitions.size(); j++) {
+		ss << "State " << terms[i].transitions[j].first << " -> State " << terms[i].transitions[j].second << endl;
+		}
+		/*vector<TransformationMonoid::Term> vw =
 			get_equalence_classes_vw(terms[i]);
 		ss << "\t equivalence classes v such that  accepts vw: ";
 		for (const TransformationMonoid::Term& CurTerm : vw) {
 			ss << alphabet_symbol::vector_to_str(CurTerm.name) << ", ";
-		}
++		}
 		ss << "\n";
 		vector<TransformationMonoid::Term> wv =
 			get_equalence_classes_wv(terms[i]);
@@ -233,11 +297,77 @@ string TransformationMonoid::to_txt() {
 		} else {
 			ss << "word synchronizing " << automat.states[sync].identifier
 			   << "\n";
-		}
-	}
+		}*/
+	}         
 	ss << "isminimal " << is_minimal() << "\n";
 	ss << to_txt_MyhillNerode();
 	return ss.str();
+}
+
+/* Альтернативный способ проверки на неоднозначность через трансмоноид. 
+   Просто ищем неоднозначные классы и потом проверяем, какой из орбит они принадлежат: одной и той же, или разным. */
+pair<int,set<pair<string,int>>> TransformationMonoid::trans_ambiguity (const FiniteAutomaton& in) {
+	vector<pair<int,int>> candidates_paired;
+	vector<int> candidates;
+	bool exp_ambiguity = false;
+	set<pair<string,int>> exp_ambiguities = {};
+	set<pair<string,int>> poly_ambiguities = {};
+	vector<vector<int>> orbits;
+	set<pair<int,int>> used_orbits = {};
+	int forbidden_orbits = 0;
+
+	FiniteAutomaton automat = in.remove_eps().remove_trap_states(); // удаляем ловушки
+	TransformationMonoid trans = TransformationMonoid(automat);
+	orbits = automat.get_orbits();
+	cout << "Total orbits: " << orbits.size() << endl;
+	if (find(orbits[0].begin(), orbits[0].end(),-1) != orbits[0].end()) {return make_pair(2, exp_ambiguities);}
+
+	 cout << "Checking transition monoid..." << endl;
+   for (int k=0; k < trans.terms.size(); k++) {
+	TransformationMonoid::Term cur = trans.terms[k];
+	cout << "Checking term " << alphabet_symbol::vector_to_str(cur.name) << endl;
+	candidates.clear();
+	for (int i=0; i < cur.transitions.size(); i++) { 
+				if (cur.transitions[i].first == cur.transitions[i].second) {
+					for (int kt=0; kt < orbits.size(); k++) 
+						{if ((find(orbits[kt].begin(), orbits[kt].end(), cur.transitions[i].first) != orbits[kt].end())
+								&& (used_orbits.find(make_pair(kt,kt)) == used_orbits.end()))
+							{candidates_paired.push_back(make_pair(kt,cur.transitions[i].first));
+							 candidates.push_back(cur.transitions[i].first);
+							 break;
+							}
+						}
+				cout << "Self loop in term to state:" << cur.transitions[i].first << endl;  
+					}
+				}
+ 	for (int j=0; j < cur.transitions.size(); j++) {
+	auto index1a = find(candidates.begin(), candidates.end(),cur.transitions[j].first);
+	auto index2a = find(candidates.begin(), candidates.end(),cur.transitions[j].second);	
+	if  ((index1a != candidates.end()) && (index2a != candidates.end()) && (cur.transitions[j].first != cur.transitions[j].second)) {
+		int index1 = index1a -candidates.begin();
+		int index2 = index2a -candidates.begin();
+		cout << "Checking pair " << cur.transitions[j].first << " and " << cur.transitions[j].second << endl;
+		pair<int,int> pp = make_pair(candidates_paired[index1].first,candidates_paired[index2].first);
+		if ((used_orbits.find(pp) == used_orbits.end())) {
+						used_orbits.insert(pp);
+						string aux = alphabet_symbol::vector_to_str(cur.name); 
+						if (pp.first == pp.second) {
+						forbidden_orbits++;
+						exp_ambiguity = true;
+						exp_ambiguities.insert(make_pair(aux, cur.transitions[j].first));
+						return make_pair(2,exp_ambiguities);
+						 } else
+							{poly_ambiguities.insert(make_pair(aux, cur.transitions[j].first));
+							}
+						}
+					} 
+				}
+			}
+  if (exp_ambiguity) {
+			return make_pair(2,exp_ambiguities);
+		}
+	else {if (poly_ambiguities.size() > 0) return make_pair(1,poly_ambiguities); else return make_pair(0, poly_ambiguities);}
+//  cout << to_txt();
 }
 
 vector<TransformationMonoid::Term> TransformationMonoid::
@@ -252,37 +382,67 @@ TransformationMonoid::get_rewriting_rules() {
 
 string TransformationMonoid::get_equalence_classes_txt() {
 	stringstream ss;
+	// Logger::init_step("Equivalence classes");
 	for (int i = 0; i < terms.size(); i++) {
+
+		// Logger::log("class " + alphabet_symbol::vector_to_str(terms[i].name),
+		// terms[i].isFinal ? "in lang" : "not in lang");
 		ss << "Term	" << alphabet_symbol::vector_to_str(terms[i].name)
 		   << "	in	language	" << terms[i].isFinal << "\n";
 		for (int j = 0; j < terms[i].transitions.size(); j++) {
+			/*Logger::log(
+				"transition " +
+					automat.states[terms[i].transitions[j].first].identifier,
+				automat.states[terms[i].transitions[j].second].identifier);*/
 			ss << automat.states[terms[i].transitions[j].first].identifier
 			   << "	->	"
 			   << automat.states[terms[i].transitions[j].second].identifier
 			   << "\n";
 		}
 	}
+	// Logger::finish_step();
 	return ss.str();
 }
 
 map<string, vector<string>> TransformationMonoid::get_equalence_classes_map() {
 	map<string, vector<string>> ss;
+	// Logger::init_step("Equivalence classes");
 	for (int i = 0; i < terms.size(); i++) {
+
+		// Logger::log("class " + to_str(terms[i].name),
+		//			terms[i].isFinal ? "in lang" : "not in lang");
+		// ss << "Term	" << to_str(terms[i].name) << "	in	language	"
+		//   << terms[i].isFinal << "\n";
 		string term = alphabet_symbol::vector_to_str(terms[i].name);
 		for (int j = 0; j < terms[i].transitions.size(); j++) {
+			// Logger::log(
+			//	"transition " +
+			//		automat.states[terms[i].transitions[j].first].identifier,
+			//	automat.states[terms[i].transitions[j].second].identifier);
+			// ss <<
+			// automat.states[terms[i].transitions[j].first].identifier
+			//   << "	->	"
+			//   <<
+			//   automat.states[terms[i].transitions[j].second].identifier
+			//   << "\n";
 			ss[term].push_back(
 				automat.states[terms[i].transitions[j].first].identifier);
 			ss[term].push_back(
 				automat.states[terms[i].transitions[j].second].identifier);
 		}
 	}
+	// Logger::finish_step();
 	return ss;
 }
 
 string TransformationMonoid::get_rewriting_rules_txt(iLogTemplate* log) {
 	stringstream ss;
+	// Logger::init_step("Rewriting Rules");
 	for (auto& item : rules) {
 		for (int i = 0; i < item.second.size(); i++) {
+			/*Logger::log("rewriting " +
+							alphabet_symbol::vector_to_str(item.second[i]),
+						alphabet_symbol::vector_to_str(item.first));*/
 			ss << alphabet_symbol::vector_to_str(item.second[i]) << "	->	"
 			   << alphabet_symbol::vector_to_str(item.first) << "\n";
 		}
@@ -290,6 +450,7 @@ string TransformationMonoid::get_rewriting_rules_txt(iLogTemplate* log) {
 	if (log) {
 		log->set_parameter("rewriting rules", ss.str());
 	}
+	// Logger::finish_step();
 	return ss.str();
 }
 
@@ -403,21 +564,32 @@ vector<TransformationMonoid::TermDouble> TransformationMonoid::
 }
 
 int TransformationMonoid::is_synchronized(const Term& w) {
+	/*Logger::init_step("Is synchronized word?");
+	Logger::log("word " + alphabet_symbol::vector_to_str(w.name));*/
 
 	if (w.transitions.size() == 0) {
+		// Logger::log("not synchronized");
+		// Logger::finish_step();
 		return -1;
 	}
 	int state = w.transitions[0].second;
 	for (int i = 1; i < w.transitions.size(); i++) {
 		if (w.transitions[i].second != state) {
+			// Logger::log("not synchronized");
+			// Logger::finish_step();
 			return -1;
 		}
 	}
+	// Logger::log("synchronized");
+	// Logger::finish_step();
 	return state;
 }
 
 // Вернет число классов эквивалентности
 int TransformationMonoid::class_card(iLogTemplate* log) {
+	// Logger::init_step("Number of equivalence classes");
+	// Logger::log("Number of equivalence classes ", to_string(terms.size()));
+	// Logger::finish_step();
 	if (log) log->set_parameter("oldautomaton", automat);
 	if (log) {
 		log->set_parameter("result", to_string(terms.size()));
@@ -429,6 +601,7 @@ int TransformationMonoid::class_card(iLogTemplate* log) {
 int TransformationMonoid::class_length(iLogTemplate* log) {
 
 	if (log) log->set_parameter("oldautomaton", automat);
+	// Logger::init_step("Longest word in the class");
 	if (log) {
 		log->set_parameter("result",
 						   to_string(terms[terms.size() - 1].name.size()));
@@ -437,6 +610,10 @@ int TransformationMonoid::class_length(iLogTemplate* log) {
 			"One of the longest words",
 			alphabet_symbol::vector_to_str(terms[terms.size() - 1].name));
 	}
+	/*Logger::log("Size", to_string(terms[terms.size() - 1].name.size()));
+	Logger::log("One of the longest words",
+				alphabet_symbol::vector_to_str(terms[terms.size() - 1].name));
+	Logger::finish_step();*/
 	return terms[terms.size() - 1].name.size();
 }
 
@@ -460,6 +637,9 @@ int TransformationMonoid::get_classes_number_MyhillNerode(iLogTemplate* log) {
 		log->set_parameter("result", equivalence_classes_table_bool.size());
 		log->set_parameter("table", t);
 	}
+	/*Logger::init_step("Myhill-Nerode сlasses number");
+	Logger::log(to_string(equivalence_classes_table_bool.size()));
+	Logger::finish_step();*/
 	return equivalence_classes_table_bool.size();
 }
 
@@ -574,6 +754,9 @@ bool TransformationMonoid::is_minimal(iLogTemplate* log) {
 	// не уверен что правильно
 	bool is_minimal_bool = (log2(automat.states.size()) + 1) <=
 						   equivalence_classes_table_bool.size();
+	/*Logger::init_step("Is minimal");
+	Logger::log(is_minimal_bool ? "true" : "false");
+	Logger::finish_step();*/
 	if (log) {
 		log->set_parameter("result", is_minimal_bool ? "true" : "false");
 	}
@@ -608,6 +791,9 @@ string TransformationMonoid::to_txt_MyhillNerode() {
 		}
 		ss << "\n";
 	}
+	// Logger::init_step("MyhillNerode TABLE");
+	// Logger::log(ss.str());
+	// Logger::finish_step();
 	return ss.str();
 }
 

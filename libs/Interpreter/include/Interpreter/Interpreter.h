@@ -31,7 +31,8 @@ class Interpreter {
 	enum class Flag {
 		auto_remove_trap_states,
 		weak_type_comparison,
-		log_theory
+		log_theory,
+		report,
 	};
 	bool set_flag(Flag key, bool value);
 
@@ -169,6 +170,7 @@ class Interpreter {
 		{"auto_remove_trap_states", Flag::auto_remove_trap_states},
 		{"weak_type_comparison", Flag::weak_type_comparison},
 		{"log_theory", Flag::log_theory},
+		// Андрей, придумай сам названия
 	};
 
 	map<Flag, bool> flags = {
@@ -182,6 +184,8 @@ class Interpreter {
 		{Flag::weak_type_comparison, false},
 		// флаг добавления теоретического блока к ф/ям в логгере
 		{Flag::log_theory, false},
+		// временный флаг для логирования в отчет, Андрей исправь
+		{Flag::report, true},
 	};
 
 	// Общий вид опрерации
@@ -256,12 +260,15 @@ class Interpreter {
 	bool run_set_flag(const SetFlag&);
 	bool run_operation(const GeneralOperation&);
 
+	// Список опреаций для последовательного выполнения
+	// vector<GeneralOperation> operations;
+
 	// Сравнение типов ожидаемых и полученных входных данных
 	bool typecheck(vector<ObjectType> func_input_type,
 				   vector<ObjectType> input_type);
 	// выбрать подходящий вариант функции для данных аргументов (если он есть)
 	optional<int> find_func(string func, vector<ObjectType> input_type);
-	optional<string> get_func_id(Function function);
+	string get_func_id(Function function);
 
 	// Построение последовательности функций по их названиям
 	optional<vector<Function>> build_function_sequence(

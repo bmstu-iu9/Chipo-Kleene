@@ -2,10 +2,13 @@
 #include "AlphabetSymbol.h"
 #include "BaseObject.h"
 #include "iLogTemplate.h"
+#include <functional>
 #include <iostream>
 #include <map>
+#include <math.h>
 #include <optional>
 #include <set>
+#include <stack>
 #include <string>
 #include <vector>
 using namespace std;
@@ -27,6 +30,7 @@ struct State {
 	State(int index, set<int> label, string identifier, bool is_terminal,
 		  map<alphabet_symbol, set<int>> transitions);
 	void set_transition(int, const alphabet_symbol&);
+	void set_identifier(const string);
 };
 
 class FiniteAutomaton : public BaseObject {
@@ -49,13 +53,19 @@ class FiniteAutomaton : public BaseObject {
 	bool is_trim = true;
 
 	bool parsing_nfa(const string&, int) const; // парсинг слова в нка
-	bool parsing_nfa_for(const string&) const;
+	bool parsing_nfa_for(const string&, int&) const;
+	bool simple_ambiguity() const;
 
 	// поиск множества состояний НКА, достижимых из множества состояний по
 	// eps-переходам (если флаг установлен в 0 - по всем переходам)
 	set<int> closure(const set<int>&, bool) const;
 	// удаление недостижимых из начального состояний
 	FiniteAutomaton remove_unreachable_states() const;
+	string colorize_edges(set<int> states_from, set<int> states_to, int group_id) const;
+	string colorize_edges(int states_from, int states_to, int group_id) const;
+	string colorize_edges(set<int> states_from, set<int> states_to, int group_id, alphabet_symbol symb) const;
+	string colorize_edges(int states_from, set<int> states_to, int group_id) const;
+	string colorize_edges(int states_from, set<int> states_to, int group_id, alphabet_symbol symb) const;
 	static bool equality_checker(const FiniteAutomaton& fa1,
 								 const FiniteAutomaton& fa2);
 	static bool bisimilarity_checker(const FiniteAutomaton& fa1,
@@ -63,15 +73,20 @@ class FiniteAutomaton : public BaseObject {
 	// принимает в качетве лимита максимальное количество цифр в
 	// числителе + знаменателе дроби, которая может встретиться при вычислениях
 	AmbiguityValue get_ambiguity_value(int digits_number_limit,
-									   optional<int>& word_length) const;
+									   optional<int>& word_length, bool simplified_test=true, iLogTemplate* log=nullptr) const;
+	AmbiguityValue get_ambiguity_monoid() const;
 	optional<bool> get_nfa_minimality_value() const;
+	FiniteAutomaton change_state_finality(int index) const;
 
 	// поиск префикса из состояния state_beg в состояние state_end
 	std::optional<std::string> get_prefix(int state_beg, int state_end,
 										  map<int, bool>& was) const;
 
 	// функция проверки на семантическую детерминированность
-	bool semdet_entry(bool annoted = false, iLogTemplate* log = nullptr) const;
+	bool semdet_entry(bool traps_removed = false, iLogTemplate* log = nullptr) const;
+
+	// Поиск языков состояний
+	void get_state_languages(bool annoted, vector<Regex>& state_languages) const;
 
   public:
 	FiniteAutomaton();
@@ -82,6 +97,7 @@ class FiniteAutomaton : public BaseObject {
 	FiniteAutomaton(const FiniteAutomaton& other);
 	// визуализация автомата
 	string to_txt() const override;
+	FiniteAutomaton rename_states(const string prefix = "") const;
 	// детерминизация ДКА
 	FiniteAutomaton determinize(iLogTemplate* log = nullptr,
 								bool is_trim = true) const;
@@ -91,7 +107,7 @@ class FiniteAutomaton : public BaseObject {
 	FiniteAutomaton remove_eps_additional(iLogTemplate* log = nullptr) const;
 	// минимизация ДКА (по Майхиллу-Нероуда)
 	FiniteAutomaton minimize(iLogTemplate* log = nullptr,
-							 bool is_trim = true) const;
+							 bool is_trim = true, bool no_renaming = false) const;
 	// пересечение НКА (на выходе - автомат, распознающий слова пересечения
 	// языков L1 и L2)
 	static FiniteAutomaton intersection(
@@ -131,7 +147,7 @@ class FiniteAutomaton : public BaseObject {
 	FiniteAutomaton merge_bisimilar(iLogTemplate* log = nullptr) const;
 	// проверка автоматов на эквивалентность
 	static bool equivalent(const FiniteAutomaton&, const FiniteAutomaton&,
-						   iLogTemplate* log = nullptr);
+						   iLogTemplate* log = nullptr); // TODO
 	// проверка автоматов на равентсво(буквальное)
 	static bool equal(const FiniteAutomaton&, const FiniteAutomaton&,
 					  iLogTemplate* log = nullptr);
@@ -143,9 +159,12 @@ class FiniteAutomaton : public BaseObject {
 	// проверка НКА на семантический детерминизм
 	bool semdet(iLogTemplate* log = nullptr) const;
 	// проверяет, распознаёт ли автомат слово
-	bool parsing_by_nfa(const string&) const;
+	bool parsing_by_nfa(const string&, int&) const;
 	// проверка автоматов на вложенность (проверяет вложен ли аргумент в this)
-	bool subset(const FiniteAutomaton&, iLogTemplate* log = nullptr) const;
+	bool subset(const FiniteAutomaton&,
+				iLogTemplate* log = nullptr) const; // TODO
+													// и тд
+	vector<vector<int>> get_orbits(bool maximal = true) const;
 	// начальное состояние
 	int get_initial();
 	// определяет меру неоднозначности

@@ -2,6 +2,7 @@
 #include "AlphabetSymbol.h"
 #include "BaseObject.h"
 #include "iLogTemplate.h"
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -87,8 +88,8 @@ class Regex : BaseObject {
 		const; // возвращает true, если состояние конечно
 	static bool equality_checker(const Regex*, const Regex*);
 	void normalize_this_regex(
-		const vector<pair<Regex, Regex>>&); // переписывание regex по
-											// пользовательским правилам
+		const vector<pair<Regex, Regex>>&); //переписывание regex по
+											//пользовательским правилам
 
 	// Рекурсивная генерация алфавита
 	void generate_alphabet(set<alphabet_symbol>& _alphabet);
@@ -97,6 +98,14 @@ class Regex : BaseObject {
 
 	void pre_order_travers() const;
 	void clear();
+
+	string get_refal_rewrite_rule(pair<Regex, Regex>) const;
+	void create_normalize_refal_code(const vector<pair<Regex, Regex>>&) const;
+	string to_refal_expr(map<string, string>*, bool) const;
+	// Получение всех символов из строки
+	bool get_symbols_from_string(vector<Regex>& res);
+
+	void eps_removing();
 
   public:
 	Regex();
@@ -121,8 +130,7 @@ class Regex : BaseObject {
 	// Генерация языка из алфавита
 	void make_language();
 	// Переписывание regex по пользовательским правилам
-	Regex normalize_regex(const vector<pair<Regex, Regex>>&,
-						  iLogTemplate* log = nullptr) const;
+	Regex normalize_regex(const vector<pair<Regex, Regex>>&, iLogTemplate* log = nullptr) const;
 	bool from_string(const string&);
 	// проверка регулярок на равентсво(буквальное)
 	static bool equal(const Regex&, const Regex&, iLogTemplate* log = nullptr);
