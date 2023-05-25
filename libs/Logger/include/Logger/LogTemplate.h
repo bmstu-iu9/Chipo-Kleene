@@ -11,11 +11,12 @@ using namespace std;
 class LogTemplate : public iLogTemplate {
   public:
 	void set_parameter(const string& key,
-					   const FiniteAutomaton& value) override;
-	void set_parameter(const string& key, Regex value) override;
-	void set_parameter(const string& key, string value) override;
-	void set_parameter(const string& key, int value) override;
-	void set_parameter(const string& key, Table value) override;
+					   const FiniteAutomaton& value, string meta = "") override;
+	void set_parameter(const string& key, Regex value, string meta = "") override;
+	void set_parameter(const string& key, string value, string meta = "") override;
+	void set_parameter(const string& key, int value, string meta = "") override;
+	void set_parameter(const string& key, Table value, string meta = "") override;
+	void set_parameter(const string& key, Plot value, string meta = "") override;
 	void set_theory_flag(bool value);
 
 	// Рендерит все логи, возвращает строку
@@ -41,7 +42,8 @@ class LogTemplate : public iLogTemplate {
 
 	// Стуктура для хранения параметров
 	struct LogParameter {
-		variant<FiniteAutomaton, Regex, string, int, Table> value;
+		variant<FiniteAutomaton, Regex, string, int, Table, Plot> value;
+		string meta;
 	};
 
 	// Параметры
@@ -53,6 +55,9 @@ class LogTemplate : public iLogTemplate {
 	static string math_mode(string str);
 	// Преобразование таблицы в tex-формат
 	static string log_table(Table t);
+
+	// Преобразование диаграммы в tex-формат
+	static string log_plot(Plot p/*vector<<int,long>,string>*/);
 	// Рекурсивно раскрывает include-выражения в файле
 	stringstream expand_includes(string filename) const;
 };

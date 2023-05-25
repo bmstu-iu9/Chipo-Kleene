@@ -174,8 +174,9 @@ void Example::parsing_nfa() {
 	cout << "to_thompson ------------------------------\n";
 	c = r.to_ilieyu(); // to_thompson(-1);
 	cout << c.to_txt();
+        int counter;
 	cout << "Parsing: aaaaaaaaaaaaaaaaaaabccccc\n";
-	cout << c.parsing_by_nfa("aaaaaaaaaaaaaaaaaaabccccc")
+	cout << c.parsing_by_nfa("aaaaaaaaaaaaaaaaaaabccccc",counter)
 		 << endl; // true если распознал слово
 }
 

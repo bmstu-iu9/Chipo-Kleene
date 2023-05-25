@@ -52,25 +52,42 @@ void LogTemplate::add_parameter(string parameter_name) {
 }
 
 void LogTemplate::set_parameter(const string& key,
-								const FiniteAutomaton& value) {
+								const FiniteAutomaton& value, string meta) {
 	parameters[key].value = value;
+	parameters[key].meta = meta;
+	add_parameter(key);
 }
 
-void LogTemplate::set_parameter(const string& key, Regex value) {
+void LogTemplate::set_parameter(const string& key, Regex value, string meta) {
 	parameters[key].value = value;
+	parameters[key].meta = meta;
+	add_parameter(key);
 }
 
-void LogTemplate::set_parameter(const string& key, string value) {
+void LogTemplate::set_parameter(const string& key, string value, string meta) {
 	parameters[key].value = value;
+	parameters[key].meta = meta;
+	add_parameter(key);
 }
 
-void LogTemplate::set_parameter(const string& key, int value) {
+void LogTemplate::set_parameter(const string& key, int value, string meta) {
 	parameters[key].value = value;
+	parameters[key].meta = meta;
+	add_parameter(key);
 }
 
-void LogTemplate::set_parameter(const string& key, Table value) {
+void LogTemplate::set_parameter(const string& key, Table value, string meta) {
 	parameters[key].value = value;
+	parameters[key].meta = meta;
+	add_parameter(key);
 }
+
+void LogTemplate::set_parameter(const string& key, Plot value, string meta) {
+	parameters[key].value = value;
+	parameters[key].meta = meta;
+	add_parameter(key);
+}
+
 
 void LogTemplate::set_theory_flag(bool value) {
 	render_theory = value;
@@ -282,4 +299,41 @@ stringstream LogTemplate::expand_includes(string filename) const {
 	}
 
 	return outstream;
+}
+
+string LogTemplate::log_plot(Plot p) {
+ size_t max_x, max_y; 
+ string visualization = "", styling, legenda;
+ vector<string> styles;
+ if (p.data.size()) {
+	styles.push_back(p.data[0].second); 
+	styling = p.data[0].second; 
+	legenda = p.data[0].second + " = {label in legend={text=$\\regexpstr{" + p.data[0].second + "}$}},\n";
+	max_x = unsigned(p.data[0].first.first); 
+	max_y = unsigned(p.data[0].first.second);
+	}
+ for (int i = 1; i< p.data.size(); i++) {
+ if (find(styles.begin(), styles.end(), p.data[i].second) == styles.end()){
+	styles.push_back(p.data[i].second);
+	styling+=", " + p.data[i].second;
+	legenda+=p.data[i].second + " = {label in legend={text=$\\regexpstr{" + p.data[i].second + "}$}},\n";
+ }
+ if (max_x < p.data[i].first.first) max_x = p.data[i].first.first;
+ if (max_y < p.data[i].first.second) max_y = p.data[i].first.second;
+ }
+ max_x = ceil((max_x*(styles.size()+3))/max(p.data.size()-2,size_t(1)));
+ if (max_x>10)                                  
+	{max_x = floor(max_x/10)*10;}
+ max_y = ceil((max_y*(styles.size()+3))/max(p.data.size()-2,size_t(1)));
+ if (max_y>10)
+	{max_y = floor(max_y/10)*10;}
+ visualization = "\\begin{tikzpicture}\\scriptsize \%begin_plot\n \\datavisualization[scientific axes=clean, visualize as line/.list={" +
+	styling + "},\n x axis={ticks={step=" +
+	to_string(max_x) + "}, label=\\footnotesize\\textit{длина слова}}, y axis={ticks={step="
+	+ to_string(max_y) + "}, label=\\footnotesize\\textit{шаги}},\n" + legenda + "style sheet = vary hue, style sheet = vary dashing]\n data[headline={x, y, set}] {\n";
+ for (int i = 0; i< p.data.size(); i++) {
+ visualization+= to_string(p.data[i].first.first) + ", " + to_string(p.data[i].first.second) + ", " + p.data[i].second + "\n";
+ }
+ visualization+="};\n \\end{tikzpicture} \%end_plot\n\n";
+ return visualization;
 }
